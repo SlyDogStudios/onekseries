@@ -12,8 +12,8 @@ scope1				=	$204
 scope2				=	$208
 scope3				=	$20c
 e_head				=	$210
-e_shoulder_left		=	$214
-e_shoulder_right	=	$218
+e_shoulder_left			=	$214
+e_shoulder_right		=	$218
 e_hip_left			=	$21c
 e_hip_right			=	$220
 e_bullet			=	$224
@@ -25,25 +25,28 @@ nmi_num:			.res 1
 seed:				.res 1
 addy_lo:			.res 1
 addy_hi:			.res 1
-control_pad:		.res 1
-control_old:		.res 1
-p_top:				.res 1
-p_bottom:			.res 1
-p_left:				.res 1
+control_pad:			.res 1
+control_old:			.res 1
 p_right:			.res 1
-enemy_placement:	.res 1
+p_left:				.res 1
+p_bottom:			.res 1
+p_top:				.res 1
+enemy_placement:		.res 1
 shot_count:			.res 1
-enemy_exist:		.res 1
-bullet_exist:		.res 1
+enemy_exist:			.res 1
+bullet_exist:			.res 1
 e_top:				.res 1
 bullet_top:			.res 1
 e_bottom:			.res 1
-bullet_bottom:		.res 1
+bullet_bottom:			.res 1
 e_left:				.res 1
-bullet_left:		.res 1
+bullet_left:			.res 1
 e_right:			.res 1
-bullet_right:		.res 1
+bullet_right:			.res 1
 font_lo:			.res 1
+add_it:				.res 1
+tri_wait:			.res 1
+tri_offset:			.res 1
 
 .segment "CODE"
 reset:
@@ -77,26 +80,34 @@ clrvid:
 	dey
 	bne clrvid
 
-	lda #$11
-	sta font_lo
-
-:	lda #$00
+	lda #$3f
 	sta $2006
+	stx $2006
+:	lda pal, x
+	sta $2007
+	inx
+	cpx #23
+	bne :-
+
+	lda #$10
+	sta font_lo
+	sta tri_wait
+
+:	ldx #$00
+	stx $2006
 	lda font_lo
 	sta $2006
 :	lda zero, y
 	sta $2007
 	iny
-	tya
-	cmp font_offsets, x
+	inx
+	cpx #5
 	bne :-
-		inx
 		lda font_lo
 		clc
 		adc #$10
 		sta font_lo
-		cmp #$c1
-		bne :--					; 39 bytes
+		bne :--
 
 	ldx #$00
 	stx $2006
@@ -105,34 +116,45 @@ clrvid:
 :	lda patterns, x
 	sta $2007
 	inx
-;	cpx #$ff
+	cpx #$45
 	bne :-
 
-	lda #$3f
+
+	lda #$20
+	sta addy_hi
+	ldy #$00
+:	cpy #4
+	bne :+
+		inc addy_hi
+:	cpy #17
+	bne :+
+		inc addy_hi
+:	ldx nt_num, y
+	lda addy_hi
 	sta $2006
-	ldx #$00
-	stx $2006
-:	lda pal, x
-	sta $2007
-	inx
-	cpx #23
+	lda nt_lo, y
+	sta $2006
+	lda #$0b
+:	sta $2007
+	dex
 	bne :-
+		iny
+		cpy #22
+		bne :----
 
-	ldx #$20
-	stx $2006
-	ldx $00
-	stx $2006
-decompress:
-	ldy nametable, x
-	beq done
-		inx
-		lda nametable, x
-:		sta $2007
-		dey
-		bne :-
-			inx
-			bne decompress
-done:
+
+:	ldx att_num, y
+	lda #$23
+	sta $2006
+	lda att_lo, y
+	sta $2006
+	lda att_byte, y
+:	sta $2007
+	dex
+	bne :-
+		iny
+		cpy #6
+		bne :--
 
 	ldx #47						; Pull in bytes for sprites and their
 :	lda the_sprites, x				;  attributes which are stored in the
@@ -140,9 +162,6 @@ done:
 	dex								;  to load and store each byte, which
 									;  get stored starting in $200, where
 	bpl :-							;  'score_ones' is located at.
-
-;	lda #4
-;	sta seed
 
 :	bit $2002
 	bpl :-
@@ -176,15 +195,8 @@ loop:
 
 	lda enemy_exist
 	bne :++
-		lda #$ff
-		sta e_head
-		sta e_shoulder_left
-		sta e_shoulder_right
-		sta e_hip_left
-		sta e_hip_right
-		sta e_left
-		sta enemy_exist
 		lda #$10
+		sta enemy_exist
 		sta shot_count
 	ldx #$ff
 :	inx
@@ -300,7 +312,7 @@ loop:
 			dex ;lda #$00
 			stx bullet_exist
 			beq @done
-:	;	lda #$00
+:
 		sta enemy_exist	
 	lda score_tens+1
 	cmp #$0a
@@ -320,7 +332,7 @@ loop:
 		cmp #$0a
 		beq :+
 			inc score_tens+1
-;			bne @done				; CHANGED FROM JMP TO BEQ TO SAVE A BYTE
+
 :
 @finito:
 @no_coll:
@@ -330,31 +342,20 @@ loop:
 @done:
 
 @no_a:
-
-	lda control_pad
-	and #up_punch
-	beq @no_up
-		dec scope0
-		dec scope0
-@no_up:
-	lda control_pad
-	and #down_punch
-	beq @no_down
-		inc scope0
-		inc scope0
-@no_down:
-	lda control_pad
-	and #left_punch
-	beq @no_left
-		dec scope0+3
-		dec scope0+3
-@no_left:
-	lda control_pad
-	and #right_punch
-	beq @no_right
-		inc scope0+3
-		inc scope0+3
-@no_right:
+	ldy #$00
+:	lda control_pad
+	and which_button, y
+	beq @no_button
+		lda which_sprite, y
+		tax
+		lda scope0, x
+		clc
+		adc which_addition, y
+		sta scope0, x
+@no_button:
+		iny
+		cpy #4
+		bne :-
 
 	lda scope0
 	sta scope1
@@ -381,6 +382,13 @@ loop:
 :	cmp nmi_num						; the main loop again
 	beq :-							;
 	jmp loop
+
+which_button:
+.byte up_punch, down_punch, left_punch, right_punch
+which_addition:
+.byte      $fe,        $02,        $fe,         $02
+which_sprite:
+.byte        0,          0,          3,           3
 
 shot_sound:
 		lda #%00011101
@@ -410,7 +418,27 @@ nmi:
 	dex
 	bne :-
 
+	dec tri_wait
+	bne @done_tri
+		ldx tri_offset
+		lda reset, x
+		and #%11110001
+		sta $400a
+		sta $4002
+		lda #$f9
+		sta $400b
+		sta $4003
+		lda #$08
+		sta tri_wait
+		lda #$01
+		sta $4000
+		dex
+		stx tri_offset
+@done_tri:
+
 	lda #$0f
+	sta $4001
+	sta $4008
 	sta $4015
 	lda #$00
 	sta $2005
@@ -425,8 +453,18 @@ e_go_y:
 e_go_x:
 	.byte $d0, $40,$b0,$50
 
-nametable:
-	.incbin "ambushed.rle",0
+nt_lo:
+.byte $84, $a4, $c4, $e4, $04, $0a, $18, $24, $2a, $38, $44, $4a, $58, $64, $6a, $78, $a0, $20, $28, $30, $38, $c0
+nt_num:
+.byte  12,  12,  24,  24,   4,  12,   4,   4,  12,   4,   4,  12,   4,   4,  12,   4,  32,   4,   4,   4,   4,  32
+att_lo:
+.byte $c9, $cc, $d1, $d4, $d8, $e0, $e8
+att_byte:
+.byte $55, $aa, $55, $aa, $f0, $ff, $0f
+att_num:
+.byte   3,   3,   3,   3,   8,   7,   8
+
+
 patterns:
 	.incbin "ambushed.chr"
 
@@ -451,8 +489,7 @@ the_sprites:
 pal:
 	.byte $0f,$00,$00,$00, $0f,$05,$05,$00, $0f,$18,$18,$00, $0f,$0f,$30,$00
 	.byte $0f,$30,$21,$00, $0f,$30,$30
-font_offsets:
-	.byte 5,10,15,20,25,30,35,40,45,50	; 9 bytes
+
 zero:
 	.byte $3c,$24,$24,$24,$3c
 one:
@@ -472,7 +509,7 @@ seven:
 eight:
 	.byte $3c,$24,$3c,$24,$3c
 nine:
-	.byte $3c,$24,$3c,$04,$04	; 50 bytes
+	.byte $3c,$24,$3c,$04,$04
 
 .segment "VECTORS"
 	.addr nmi
