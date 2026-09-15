@@ -82,13 +82,35 @@ clrvid:
 	dey
 	bne clrvid
 
+	lda #$20
+	sta addy+1
+
+;	ldx #$00
+:	lda addy+1
+	sta $2006
+	lda addy+0
+	sta $2006
+	lda #$0d
+	sta $2007
+	sta $2007
+	sta $2007
+	sta $2007
+	lda addy+0
+	clc
+	adc #32
+	sta addy+0
+	bne :-
+		inc addy+1
+		lda addy+1
+		cmp #$23
+		bne :-
+
 	lda #$10
 	sta font_lo
 	sta ticks
 
 :	ldx #$00
-	txa
-	sta $2006
+	stx $2006
 	lda font_lo
 	sta $2006
 :	lda zero, y
@@ -115,28 +137,6 @@ clrvid:
 	cpx #46
 	bne :-
 
-	lda #$20
-	sta addy+1
-
-	ldx #$00
-:	lda addy+1
-	sta $2006
-	lda addy+0
-	sta $2006
-	lda #$0d
-	sta $2007
-	sta $2007
-	sta $2007
-	sta $2007
-	lda addy+0
-	clc
-	adc #32
-	sta addy+0
-	bne :-
-		inc addy+1
-		lda addy+1
-		cmp #$23
-		bne :-
 
 	ldy #$00
 :	ldx #$00
@@ -180,12 +180,11 @@ clrvid:
 wait:
 	jsr do_random_set
 
-	ldx #$00
+	ldx #39
 :	lda spr_start, x
 	sta score_tens, x
-	inx
-	cpx #40
-	bne :-
+	dex
+	bpl :-
 
 	lda control_pad
 	and #start_punch
@@ -339,24 +338,7 @@ clear_tang:
 	lda #$00
 	sta t_action, y
 	rts
-controls:
-.byte left_punch, right_punch
-max:
-.byte        $40,         $d0
-move:
-.byte        $fc,         $04
 
-spr_start:
-.byte $c0,$01,$00,$78
-.byte $c0,$01,$00,$80
-.byte $a0,$0b,$01,$78
-.byte $a0,$0b,$41,$80
-.byte $1f,$0c,$01,$4c
-.byte $1f,$0c,$01,$6c
-.byte $1f,$0c,$01,$8c
-.byte $1f,$0c,$01,$ac
-.byte $1f,$0c,$01,$cc
-.byte $c0,$04,$00,$d0
 
 do_score:
 	lda score_tens+1
@@ -395,8 +377,6 @@ go_no_start:
 	beq :-
 	jmp game_over
 
-pal_end:
-.byte $00,$10
 
 nmi:
 	pha								; Save the registers
@@ -494,7 +474,13 @@ nmi:
 	tax								;
 	pla								;
 irq:
-	rti
+max:
+	rti		; rti=$40 and is the first byte of the table max
+.byte                    $d0
+controls:
+.byte left_punch, right_punch
+move:
+.byte        $fc,         $04
 
 do_random_set:
 	lda seed
@@ -518,7 +504,9 @@ drop_ticks:
 .byte $30, $2e, $2c, $2a, $28, $26, $24, $22, $20, $1e, $1a
 
 rand_tbl:
-.byte 205, 154, 103,  52,   0
+.byte 205, 154, 103,  52	;,   0 rand_tbl spills into pal_end
+pal_end:
+.byte $00,$10
 the_chr:
 .incbin "dream.chr"
 pal:
@@ -526,7 +514,18 @@ pal:
 .byte $21,$30,$26,$27, $21,$0f,$26,$1a
 
 bg_offset:
-.byte  24, 24,   1,  4, 28, 28, 192
+.byte  24, 24,   1,  4, 28, 28	;, 192 bg_offset spills into spr_start
+spr_start:
+.byte $c0,$01,$00,$78
+.byte $c0,$01,$00,$80
+.byte $a0,$0b,$01,$78
+.byte $a0,$0b,$41,$80
+.byte $1f,$0c,$01,$4c
+.byte $1f,$0c,$01,$6c
+.byte $1f,$0c,$01,$8c
+.byte $1f,$0c,$01,$ac
+.byte $1f,$0c,$01,$cc
+.byte $c0,$04,$00,$d0
 bg_lo:
 .byte $44,$64, $84,$a4,$c4,$e4, $00
 bg_hi:
