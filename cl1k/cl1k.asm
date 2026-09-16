@@ -72,6 +72,7 @@ addy_hi:		.res 1
 comp_it:		.res 1
 sq1_offset:		.res 1
 sq1_wait:		.res 1
+pal_offset:		.res 1
 
 .segment "CODE"
 reset:
@@ -107,25 +108,24 @@ clrvid:
 	lda #$0f
 	sta $4015
 
-	lda #$11
+	lda #$10
 	sta font_lo
 
-:	lda #$00
-	sta $2006
+:	ldx #$00
+	stx $2006
 	lda font_lo
 	sta $2006
 :	lda zero, y
 	sta $2007
 	iny
-	tya
-	cmp font_offsets, x
+	inx
+	cpx #5
 	bne :-
 		inx
 		lda font_lo
 		clc
 		adc #$10
 		sta font_lo
-		cmp #$c1
 		bne :--					; 39 bytes
 
 
@@ -144,7 +144,7 @@ clrvid:
 	sta comp_it
 	ldy #$00
 :	ldx #$00
-	lda addy_hi;addy_hi, y
+	lda addy_hi
 	sta $2006
 	lda addy_lo, y
 	sta $2006
@@ -169,14 +169,15 @@ clrvid:
 		bne :----
 
 
-	ldx #$00						; Pull in bytes for sprites and their
+	ldx #75						; Pull in bytes for sprites and their
 	stx $2000
 :	lda the_sprites, x				;  attributes which are stored in the
 	sta p_left_head, x				;  'the_sprites' table. Use X as an index
-	inx								;  to load and store each byte, which
-	cpx #76							;  get stored starting in $200, where
-	bne :-							;  'left_head' is located at.
+	dex
+	bpl:-
 
+	lda #3
+	sta pal_offset
 									; 21 bytes
 	lda #$3f						; Set the values for the bg palette
 	sta $2006						;
@@ -198,7 +199,7 @@ clrvid:
 ;00001010
 ;11110010
 loop:
-	ldx #$00
+	ldx #$03
 	ldy #$00
 @enemies_move_and_box:
 	lda shokr_piece2_lo, x
@@ -260,9 +261,8 @@ loop:
 ;	clc
 	adc #$04
 	sta shokrs_bot, x
-	inx
-	cpx #$04
-	bne @enemies_move_and_box
+	dex
+	bpl @enemies_move_and_box
 
 
 
@@ -327,47 +327,25 @@ loop:
 
 
 
-
+	ldy #3
 @do_controls:
 	lda control_pad
-	and #left_punch
-	beq @no_left
-		lda p_left_head+3
-		cmp #$20
-		beq @no_left
-			dec p_left_head+3
-;			dec p_left_head+3
-			bne @no_down
-@no_left:
-	lda control_pad
-	and #right_punch
-	beq @no_right
-		lda p_left_head+3
-		cmp #$d0
-		beq @no_right
-			inc p_left_head+3
-;			inc p_left_head+3
-			bne @no_down
-@no_right:
-	lda control_pad
-	and #up_punch
-	beq @no_up
-		lda p_left_head
-		cmp #$0f
-		beq @no_up
-			dec p_left_head
-;			dec p_left_head
-			bne @no_down
-@no_up:
-	lda control_pad
-	and #down_punch
-	beq @no_down
-		lda p_left_head
-		cmp #$af
-		beq @no_down
-			inc p_left_head
-;			inc p_left_head
-@no_down:
+	and buttons, y
+	beq @next_control
+		sty pal_offset
+		ldx y_or_x, y
+		lda p_left_head, x
+		cmp boundary, y
+		beq @next_control
+			clc
+			adc which_addition, y
+			sta p_left_head, x
+			bne :+
+@next_control:
+	dey
+	bpl @do_controls
+:
+
 	clc
 	lda p_left_head
 	sta p_right_head
@@ -422,14 +400,24 @@ done:
 	beq :-							;
 	bne done
 
-
-
+buttons:
+.byte left_punch, right_punch, up_punch, down_punch
+y_or_x:
+.byte 3,          3,           0,        0
+which_addition:
+.byte $fe,      $02,         $fe,      $02
+boundary:
+.byte $20,      $d0,         $0f,      $af
+pal17:
+.byte $30,      $30,         $00,      $21
+pal18:
+.byte $30,      $30,         $00,      $00
 
 nmi:
 	inc nmi_num
 
 	lda v_num
-	cmp #$0d
+	cmp #$0c
 	bcc :+
 		lda #$ff
 		sta v_num
@@ -438,6 +426,16 @@ nmi:
 
 	lda #$02						; Do sprite transfer
 	sta $4014						;
+
+	ldx pal_offset
+	lda #$3f
+	sta $2006
+	lda #$11
+	sta $2006
+	lda pal17, x
+	sta $2007
+	lda pal18, x
+	sta $2007
 
 	ldx #$01
 	stx $4016
@@ -451,6 +449,8 @@ nmi:
 	dex
 	bne :-
 
+	lda #%10000000
+	sta $2000
 	lda #$00
 	sta $2005
 	sta $2005
@@ -503,14 +503,14 @@ shokr_piece3_hi:
 	.byte >r_shokr1x, >r_shokr2x, >r_shokr3x, >r_shokr4x
 
 spark_y:
-	.byte $10,$52,$a4,$4e,$7c,$24,$a2,$12,$74,$92,$46,$30,$6e,$28,$aa;,$56,$a2
+	.byte $10,$52,$a4,$4e,$7c,$24,$a2,$12,$74,$92,$46,$30,$6e;,$28;,$aa;,$56,$a2
 spark_x:
-	.byte $c8,$28,$a2,$96,$60,$70,$5a,$46,$b4,$78,$62,$86,$54,$ac,$62;,$6c,$5a
+	.byte $c8,$28,$a2,$96,$60,$70,$5a,$46,$b4,$78,$62,$86,$54;,$ac;,$62;,$6c,$5a
 
 pal_bg:
 	.byte $0f,$17,$0f,$0f, $0f,$15,$0f,$0f, $0f,$0f,$0f,$0f, $0f,$0f,$0f,$0f
 pal_spr:
-	.byte $0f,$21,$10,$30, $0f,$38;,$12,$23
+	.byte $0f,$21,$00,$30, $0f,$38;,$12,$23
 ;addy_hi:
 ;	.byte $23,$23,$23,$23,$20,$20, $20,$20,$20,$20,$20,$20,$20,$20
 addy_lo:
@@ -519,7 +519,7 @@ addy_lo:
 ;	.byte $18,$18,$18,$18,$18,$18, $1e,$1e,$1e,$1e,$1e,$1e,$1e,$1e
 
 patterns:
-	.incbin "cl1k.chr"
+.incbin "cl1k.chr"
 
 ; Sprite definitions
 the_sprites:
@@ -544,8 +544,8 @@ the_sprites:
 	.byte $a4,$0c,$01,$78			; 
 	.byte $a4,$0c,$01,$80			; 
 
-	.byte $d3,$01,$00,$78			; score_tens
-	.byte $d3,$01,$00,$80			; score_ones
+	.byte $d3,$01,$01,$78			; score_tens
+	.byte $d3,$01,$01,$80			; score_ones
 
 	.byte $4f,$0f,$01;,$50			; virus
 
@@ -569,9 +569,7 @@ seven:
 eight:
 	.byte $3c,$24,$3c,$24,$3c
 nine:
-	.byte $3c,$24,$3c,$04,$04	; 50 bytes
-font_offsets:
-	.byte 5,10,15,20,25,30,35,40,45,50	; 9 bytes
+	.byte $3c,$24,$3c,$04,$04
 
 .segment "VECTORS"
 	.addr nmi
