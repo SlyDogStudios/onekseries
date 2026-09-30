@@ -1,3 +1,23 @@
+; FOR POINTS
+;
+; Why did the chicken cross the road? For Points, of course!
+; Get the chicken across the road to get some points. Don't
+; get hit by a car though. Chickens are pretty defenseless 
+; against cars.
+;
+; During a 1-player game, you will race against a computer
+; chicken. During 2-player, you and a friend will race
+; chickens to see who can finish the game first. On both
+; modes, the first to get across the road for the 10th
+; time wins. Do it FOR POINTS!
+; 
+; Controls
+;  Start  - Controller 1 to start a 1-player game and reset
+;            at the end of the game.
+;           Controller 2 to start a 2-player game
+;  Up/Down- Controller 1 moves the left chicken up or down
+;           Controller 2 moves the right chicken up or down
+
 ; Basic constants
 start_punch			=	$08
 up_punch			=	$10
@@ -52,34 +72,40 @@ car8_3			=	$2b0
 car8_4			=	$2b4
 car8_5			=	$2b8
 car8_6			=	$2bc
-p1				=	$2c0
-
+p1			=	$2c0
 score			=	$2c4
+p2			=	$2c8
+score2			=	$2cc
 
-cars_y_spr		=	$400
-cars_x_spr		=	$430
+;song		=	$70
+;sq2_offset	=	$71
+;players		=	$72
+;anim_count	=	$73
 
 .segment "ZEROPAGE"
-nmi_num:		.res 1
-control_pad:	.res 1
 addy:			.res 2
-p1_left:		.res 1
-p1_right:		.res 1
-p1_top:			.res 1
-p1_bottom:		.res 1
-cars_left:		.res 8	; starts at $08
-cars_right:		.res 8	; $10
-cars_top:		.res 8	; $18
-cars_bottom:	.res 8	; $20
-font_lo:		.res 1
-anim_count:		.res 1
-anim_do:		.res 1
+ppu_addy:		.res 2
+control_pad:		.res 2
+nmi_num:		.res 1
+p1_left:		.res 2
+p1_right:		.res 2
+p1_top:			.res 2
+p1_bottom:		.res 2
+cars_left:		.res 8	; starts at $0f
+cars_right:		.res 8	; $17
+cars_top:		.res 8	; $1f
+cars_bottom:		.res 8	; $27
+song:			.res 1
 sq2_offset:		.res 1
+players:		.res 1
+anim_count:		.res 1
+
 
 .segment "CODE"
 reset:
 	sei
 	ldx #$ff
+	stx $4015
 	txs
 	inx
 	stx $2000
@@ -87,6 +113,9 @@ reset:
 
 :	bit $2002
 	bpl :-
+:	bit $2002
+	bpl :-
+
 
 	txa
 	sta addy+0
@@ -107,30 +136,39 @@ clrvid:
 	dey
 	bne clrvid
 
-	lda #$11
-	sta font_lo
+	lda #$10
+	sta addy+0
 
-:	lda #$00
-	sta $2006
-	lda font_lo
+:	ldx #$00
+	stx $2006
+	lda addy+0
 	sta $2006
 :	lda zero, y
 	sta $2007
 	iny
-	tya
-	cmp font_offsets, x
+	inx
+	cpx #5
 	bne :-
-		inx
-		lda font_lo
+		lda addy+0
 		clc
 		adc #$10
-		sta font_lo
-		cmp #$c1
+		sta addy+0
 		bne :--					; 39 bytes
+		tay
+		tax
+
+	sty $2006
+	lda #$b0
+	sta $2006
+:	lda patterns, y
+	sta $2007
+	iny
+	cpy #88
+	bne :-
+
 
 	lda #$3f						; 21 bytes
-	sta $2006						; Set the values for the bg palette
-	ldx #$00						;
+	sta $2006						; Set the values for the bg palette						;
 	stx $2006						;
 :	lda pal_bg, x					;
 	sta $2007						;
@@ -138,16 +176,6 @@ clrvid:
 	cpx #31							;
 	bne :-							;
 
-
-	ldx #$00
-	stx $2006
-	lda #$b0
-	sta $2006
-:	lda patterns, x
-	sta $2007
-	inx
-	cpx #88
-	bne :-
 
 
 	ldx #$20
@@ -166,158 +194,34 @@ clrvid:
 			bne @decompress
 @done:
 
-	ldx #$00						; Pull in bytes for sprites and their
-:	lda the_sprites, x				;  attributes which are stored in the
-	sta car1_1, x					;  'the_sprites' table. Use X as an index
-	inx								;  to load and store each byte, which
-	cpx #200						;  get stored starting in $200, where
-	bne :-							;  'car1_1' is located at.
-
-	ldx #$00
-:	lda car1_1, x
-	sta cars_y_spr, y
-	lda car1_1+3, x
-	sta cars_x_spr, y
-	inx
-	inx
-	inx
-	inx
-	iny
-	cpy #48
-	bne :-
-
-	ldx #$00
-	ldy #$00
-:;	lda cars_x_spr, x
-;	sta cars_left, y
-;	clc
-;	adc #$18
-;	sta cars_right, y
-	lda cars_y_spr, x
-;	clc
-	adc #$01
-	sta cars_top, y
-;	clc
-	adc #$0e
-	sta cars_bottom, y
-	inx
-	inx
-	inx
-	inx
-	inx
-	inx
-	iny
-	cpy #$08
-	bne :-
-
-	lda #$0f
-	sta $4015
-
-:	bit $2002
-	bpl :-
-
 	lda #%10000000
 	sta $2000
 	lda #%00011010
 	sta $2001
 
-loop:
-	lda p1
-	cmp #$18
-	bne :++
-		lda #%01000101
-		sta $4000
-		sta $4001
-		sta $4002
-		sta $4003
-		lda score+1
-		cmp #$0a
-		bne :+
-@game_over:
-	lda control_pad
+wait:
+	ldx #1
+@still_wait:
+	lda control_pad, x
 	and #start_punch
 	beq @no_start
-		jmp reset
+		stx players
+		ldy #$00						; Pull in bytes for sprites and their
+:		lda the_sprites, y				;  attributes which are stored in the
+		sta car1_1, y					;  'the_sprites' table. Use X as an index
+		iny								;  to load and store each byte, which
+		cpy #208						;  get stored starting in $200, where
+		bne :-							;  'car1_1' is located at.
+
+		beq loop
 @no_start:
-			beq @game_over
-:		inc score+1
-		lda #$e0
-		sta p1
-:
-	ldy #$00
-	ldx #$00
-@again:
-	lda cars_left, x
-	cmp p1_right
-		bcs @no_coll
-	lda cars_right, x
-	cmp p1_left
-		bcc @no_coll
-	lda cars_top, x
-	cmp p1_bottom
-		bcs @no_coll
-	lda cars_bottom, x
-	cmp p1_top
-		bcc @no_coll
-		lda #%11010111
-		sta $400c
-		sta $400e
-		sta $400f
-			bne @game_over
-@no_coll:
-	lda cars_x_spr, y
-	clc
-	adc car_speeds, x
-	sta cars_x_spr, y
-	sta cars_left, x
-	iny
-	clc
-	adc #$08
-	sta cars_x_spr, y
-	iny
-	clc
-	adc #$08
-	sta cars_x_spr, y
-	iny
+	dex
+	bpl @still_wait
+		bne wait
 
-	lda cars_x_spr, y
-	clc
-	adc car_speeds, x
-	sta cars_x_spr, y
-	iny
-	clc
-	adc #$08
-	sta cars_x_spr, y
-	iny
-	clc
-	adc #$08
-	sta cars_x_spr, y
-	clc
-	adc #$08
-	sta cars_right, x
-	iny
-	inx
-	cpx #$08
-	bne @again
+loop:
 
-
-	lda p1
-;	clc
-	adc #$02
-	sta p1_top
-;	clc
-	adc #$04
-	sta p1_bottom
-	lda p1+3
-;	clc
-	adc #$02
-	sta p1_left
-;	clc
-	adc #$04
-	sta p1_right
-
-	lda anim_count
-	cmp #$20
+	dec song
 	bne :++
 		ldx sq2_offset
 		cpx #$04
@@ -330,56 +234,187 @@ loop:
 		sta $4006
 		sta $4007
 		inc sq2_offset
+		lda #$20
+		sta song
+:
+
+
+
+
+	ldx #8
+@check_score:
+	lda p1, x
+	cmp #$18
+	bne @not_score
+		lda #%01000101
+		sta $4000
+		sta $4001
+		sta $4002
+		sta $4003
+		lda score+1, x
+		cmp #$0a
+		bne @do_score
+			jmp game_over
+@do_score:
+		inc score+1, x
+		lda #$e0
+		sta p1, x
+@not_score:
+	txa
+	sec
+	sbc #8
+	tax
+	bpl @check_score
+
+	ldy #1
+:	ldx #7
+:	lda cars_left, x
+	cmp p1_right, y
+		bcs @no_coll
+	lda cars_right, x
+	cmp p1_left, y
+		bcc @no_coll
+	lda cars_top, x
+	cmp p1_bottom, y
+		bcs @no_coll
+	lda cars_bottom, x
+	cmp p1_top, y
+		bcc @no_coll
+		lda #%11010111
+		sta $400c
+		sta $400e
+		sta $400f
+		tya
+		asl
+		asl
+		asl
+		tay
+		lda #$e0
+		sta p1, y
+@no_coll:
+	dex
+	bpl :-
+		dey
+		bpl :--
+	
+
+	ldy #$a8
+	ldx #$07
+@again:
+	lda car1_1+0, y
+	clc
+	adc #$01
+	sta cars_top, x
+	clc
+	adc #$0e
+	sta cars_bottom, x
+	lda car1_1+3, y
+	clc
+	adc car_speeds, x
+	sta car1_1+3, y
+	sta car1_4+3, y
+	sta cars_left, x
+	clc
+	adc #$08
+	sta car1_2+3, y
+	sta car1_5+3, y
+	clc
+	adc #$08
+	sta car1_3+3, y
+	sta car1_6+3, y
+	clc
+	adc #$08
+	sta cars_right, x
+	tya
+	sec
+	sbc #$18
+	tay
+	dex
+	bpl @again
+
+
+	ldy #1
+	ldx #8
+@start_players:
+	lda anim_count
+	cmp #$20
+	bne :+
 		lda #$00
 		sta anim_count
 :	cmp #$10
 	bcc :+
 		lda #$0d
-		sta p1+1
+		sta p1+1, x
 		lda #%01010111
-		bne :++
+		bne :+++
+		
 :	lda #$10
-	sta p1+1
-	lda #%01010110
-:
-		sta $4008
-		sta $400a
-		sta $400b
+	sta p1+1, x
+	lda players
+	bne :+
+		lda #$10
+		sta control_pad+1
+	
+:	lda #%01010110
+:	sta $4008
+	sta $400a
+	sta $400b
 	inc anim_count
 
 
-	ldy #$00
-	ldx #$00
-:	lda cars_x_spr, y
-	sta car1_1+3, x
-	inx
-	inx
-	inx
-	inx
-	iny
-	cpy #48
-	bne :-
-
+	lda p1, x
+	clc
+	adc #$02
+	sta p1_top, y
+	;clc
+	adc #$04
+	sta p1_bottom, y
+	lda p1+3, x
+	clc
+	adc #$02
+	sta p1_left, y
+	;clc
+	adc #$04
+	sta p1_right, y
 
 @do_controls:
-	lda control_pad
+	lda control_pad, y
 	and #up_punch
 	beq @no_up
-		dec p1
+		dec p1, x
 @no_up:
-	lda control_pad
+	lda control_pad, y
 	and #down_punch
 	beq @no_down
-		lda p1
+		lda p1, x
 		cmp #$e1
 		beq @no_down
-			inc p1
+			inc p1, x
 @no_down:
+	txa
+	sec
+	sbc #8
+	tax
+	dey
+	bpl @start_players
+
 
 	lda nmi_num						; Wait for an NMI to happen before running
 :	cmp nmi_num						; the main loop again
 	beq :-							;
 	jmp loop
+
+
+game_over:
+	lda control_pad
+	and #start_punch
+	beq @no_start
+		jmp reset
+@no_start:
+	lda nmi_num						; Wait for an NMI to happen before running
+:	cmp nmi_num						; the main loop again
+	beq :-							;
+	bne game_over
 
 patterns:
 	.incbin "for_points.chr"
@@ -389,17 +424,20 @@ nmi:
 	lda #$02						; Do sprite transfer
 	sta $4014						;
 
-	ldx #$01
-	stx $4016
-	dex
-	stx $4016
-	lda control_pad
-	ldx #$08
-:	lda $4016
-	lsr A
-	ror control_pad
-	dex
-	bne :-
+	ldx #1
+	stx $4016						;
+	dex						;
+	stx $4016						;
+:	lda control_pad, x					;
+	ldy #$08						;
+:	lda $4016, x						;
+	lsr a							;
+	ror control_pad, x					;
+	dey								;
+	bne :-							;
+	inx
+	cpx #2
+	bne :--
 
 	lda #$00
 	sta $2005
@@ -408,14 +446,14 @@ irq:
 	rti
 
 ;11010111 01010110 01010010 01010100
+
+pal_bg:
+	.byte $0f,$21,$30,$00;,$0f,$00,$00,$00,$0f,$00,$00,$00,$0f,$00,$00,$00
 sq2:
 	.byte $57,$52,$54,$52
 
 car_speeds:
 	.byte 253,255,254,255,1,3,2,1
-
-pal_bg:
-	.byte $0f,$21,$30,$00,$0f,$00,$00,$00,$0f,$00,$00,$00,$0f,$00,$00,$00
 pal_spr:
 	.byte $0f,$27,$17,$31,$0f,$19,$0b,$31,$0f,$05,$07,$31,$0f,$30,$10
 
@@ -481,14 +519,13 @@ the_sprites:
 	.byte $cf,$0f,$82,$98			; 
 	.byte $cf,$0e,$c2,$a0			; 
 
-	.byte $e0,$0d,$00,$7c			; p1
-	.byte $0c,$01,$03,$7c			; score1
+	.byte $e0,$0d,$00,$60			; p1
+	.byte $0c,$01,$03,$60			; score
+	.byte $e0,$0d,$00,$98			; p2
+	.byte $0c,$01,$03,$98			; score2
 
 
 
-
-font_offsets:
-	.byte 5,10,15,20,25,30,35,40,45,50	; 10 bytes
 zero:
 	.byte $3c,$24,$24,$24,$3c
 one:
