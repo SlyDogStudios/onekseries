@@ -269,7 +269,6 @@ loop:
 @ball_set:
 		lda #$80
 		sta wait_for_a
-		sta bl_top
 		sta bl_lft
 		lda #$00
 		sta move_y_speed+0
@@ -480,20 +479,19 @@ end_loop:
 	beq :-
 	jmp loop
 
-x_table_lo:
-.byte $f0, $10
-x_table_hi:
-.byte $ff, $00
-
 button_which:
 .byte up_punch, down_punch
 boundary:
 .byte $27,      $bf
 add_which:
 .byte $ff,      $01
-
+x_table_hi:				; x_table_hi and init share the first two bytes
 init:
 .byte $ff,$00,$01,$01,$18,$e0,$80,$78,$78,$80
+x_table_lo:
+.byte $f0, $10
+
+
 x_twos:
 	lda #0				; Two's complement for X axis
 	sec				;  so we change the ball direction
@@ -515,10 +513,9 @@ which_new_dir:
 :			lda move_y_speed+1
 			bmi :+
 				lda #1
-				sta bl_dir
-				rts
+				bne :++
 :			lda #2
-			sta bl_dir
+:			sta bl_dir
 			rts
 @player1:
 	lda move_x_speed+1
@@ -527,12 +524,9 @@ which_new_dir:
 :		lda move_y_speed+1
 		bmi :+
 			lda #4
-			sta bl_dir
-			rts
+			bne :--
 :		lda #3
-		sta bl_dir
-@finished:
-	rts
+		bne :---
 
 nmi:
 	pha				; Save the registers
@@ -576,10 +570,11 @@ nmi:
 			sta channel_notelength, x
 			lda channel_headers, x		; Get the data for $4000/4/8/c
 			sta channel_header
-			lda channel_which, x		; Offset for which channel to use and place
-			tay				;  into the Y register
-			txa				; Save the X register on the stack
+			txa				; Get loop offset and push on the stack for later
 			pha
+			asl				; Multiply loop offset by 4 to get proper channel
+			asl				;  to run and stick it in the Y register (head nod to
+			tay				;  TakuikaNinja on NESDev forums for this snippet)
 			lda channel_melody, x		; Get what offset the channel is on from zeropage
 			tax				;  and place it in the X register
 			lda channel_header		; Place the header into the top register of
@@ -619,11 +614,9 @@ irq:
 channel_headers:			; Data for $4000/4/8/c
 .byte $e4,$9d,$ff,$19
 channel_notelength_perm:		; Note lengths for each channel
-.byte $01,$02,$02,$04
+.byte $01,$02,$02;,$04			; channel_notelength_perm spills into channel_melody_max
 channel_melody_max:			; How far the offset travels per address
 .byte $04,$10,$08,$02
-channel_which:				; Offsets for which APU channel to access
-.byte $00,$04,$08,$0c
 
 pal:
 .byte $0f
