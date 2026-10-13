@@ -1,7 +1,36 @@
+; No Points
+;
+; Take on the role of Manny Maniac, the main threat to
+; all of chicken-kind for decades now. Little did the
+; chickens know that during the events of For Points, he
+; and his minions were intentionally trying to run over
+; the chickens to prevent them from collecting points,
+; which are fundamental to their existence. Now he's
+; back, and it is your job to try and destroy as many
+; chickens as possible.
+;
+; Run over 100 chickens as they try to cross the road for
+; points, and allow them no points. Don't let 10 of them
+; cross the road, though, or else they will have collected
+; the points that they need.
+; 
+; Controls
+;  Select - Before play, use this to choose which of the
+;           four cars you would like to use to run over
+;           chickens
+;  Start  - Starts the game and resets at the end of the
+;            game
+;  L/R    - Move the car left or right
+
 ; Basic constants
-start_punch			=	$08
-left_punch			=	$40
-right_punch			=	$80
+a_punch		= $01
+b_punch		= $02
+select_punch	= $04
+start_punch	= $08
+up_punch	= $10
+down_punch	= $20
+left_punch	= $40
+right_punch	= $80
 
 ; Sprite ram
 car1			=	$200
@@ -34,36 +63,44 @@ stripe4a		=	$24c
 stripe4b		=	$250
 stripe4c		=	$254
 
+pal_address		=	$c0
 
 .segment "ZEROPAGE"
-nmi_num:		.res 1
-control_pad:	.res 1
 addy:			.res 2
+nmi_num:		.res 1
+control_pad:		.res 1
+control_old:		.res 1
+save2000:		.res 1
 p_left:			.res 1
 p_right:		.res 1
 p_top:			.res 1
 p_bot:			.res 1
-e_left:			.res 2
-e_right:		.res 2
-e_top:			.res 2
-e_bot:			.res 2
+e_left:			.res 1
+e_right:		.res 1
+e_top:			.res 1
+e_bot:			.res 1
 scroll_y:		.res 1
-font_lo:		.res 1
 seed:			.res 1
-sq1_wait:		.res 1
-sq1_offset:		.res 1
-sq2_wait:		.res 1
-sq2_offset:		.res 1
+
+color_offset:		.res 1
+
+sound_tempo:		.res 1
+channel_header:		.res 1
+channel_notelength:	.res 2
+channel_melody:		.res 2
 
 .segment "CODE"
 reset:
 	sei
 	ldx #$ff
+	stx $4015
 	txs
 	inx
 	stx $2000
 	stx $2001
 
+:	bit $2002
+	bpl :-
 :	bit $2002
 	bpl :-
 
@@ -86,31 +123,27 @@ clrvid:
 	dey
 	bne clrvid
 
-	lda #$11
-	sta font_lo
+	lda #$10
+	sta addy+0
 
-:	lda #$00
-	sta $2006
-	lda font_lo
+:	ldx #$00
+	stx $2006
+	lda addy+0
 	sta $2006
 :	lda zero, y
 	sta $2007
 	iny
-	tya
-	cmp font_offsets, x
+	inx
+	cpx #5
 	bne :-
-		inx
-		lda font_lo
+		lda addy+0
 		clc
 		adc #$10
-		sta font_lo
-		cmp #$c1
+		sta addy+0
 		bne :--					; 39 bytes
 
-	lda #$0f
-	sta $4015
-
-	ldx #$00
+	tax
+	
 	stx $2006
 	lda #$b0
 	sta $2006
@@ -119,32 +152,24 @@ clrvid:
 	inx
 	bne :-
 
-									; Pull in bytes for sprites and their
+:	lda pal_bg, x
+	sta pal_address, x
+	inx
+	cpx #27
+	bne :-
+
+	lda #1
+	tax
+	stx sound_tempo	
+:	sta channel_notelength, x
+	dex
+	bpl :-
+
+	ldx #87								; Pull in bytes for sprites and their
 :	lda the_sprites, x				;  attributes which are stored in the
 	sta car1, x						;  'the_sprites' table. Use X as an index
-	inx								;  to load and store each byte, which
-	cpx #88							;  get stored starting in $200, where
-	bne :-							;  'car1' is located at.
-
-	lda #$3f						; 23 bytes
-	sta $2006						; Set the values for the bg palette
-	ldx #$00						;
-	stx $2006						;
-:	lda pal_bg, x					;
-	sta $2007						;
-	inx								;
-	cpx #27							;
-	bne :-							;
-;	ldx #$00
-;	lda #$23
-;	sta $2006
-;	lda #$c0
-;	sta $2006
-;	lda #$00
-;:	sta $2007
-;	inx
-;	cpx #64
-;	bne :-
+	dex								;  to load and store each byte, which
+	bpl :-							;  'car1' is located at.
 
 	lda #%00000100
 	sta $2000
@@ -164,16 +189,36 @@ clrvid:
 		cpy #$07
 		bne :--
 
-:	bit $2002
-	bpl :-
-
-	lda #%10000100
+	lda #%10000000
 	sta $2000
+	sta save2000
 	lda #%00011010
 	sta $2001
 
 wait:
 	jsr do_random_set
+
+	ldx color_offset
+	lda color0, x
+	sta pal_address+17
+	lda color1, x
+	sta pal_address+18
+	lda color2, x
+	sta pal_address+19
+
+	lda control_pad
+	eor control_old
+	and control_pad
+	and #select_punch
+	beq @no_select
+		inc color_offset
+		lda color_offset
+		cmp #4
+		bne @no_select
+			lda #0
+			sta color_offset
+@no_select:
+
 	lda control_pad
 	and #start_punch
 	beq @no_start
@@ -182,7 +227,7 @@ wait:
 	lda nmi_num						; Wait for an NMI to happen before running
 :	cmp nmi_num						; the main loop again
 	beq :-		
-	jmp wait
+	bne wait
 
 loop:
 	lda #%01110000
@@ -238,7 +283,6 @@ loop:
 	cmp p_top
 		bcc @no_coll
 			lda #%00001111
-			sta $400c
 			sta $400e
 			sta $400f
 			lda #$f0
@@ -247,30 +291,21 @@ loop:
 @no_coll:
 
 
-
+	ldx #1
 @do_controls:
 	lda control_pad
-	and #left_punch
-	beq @no_left
-;		jsr do_random_set
-		lda car1+3
-		cmp #$26
-		bcc @no_left
-			sec
-			sbc #$04
-			sta car1+3
-@no_left:
-	lda control_pad
-	and #right_punch
-	beq @no_right
+	and button_which, x
+	beq @next_button
 		jsr do_random_set
 		lda car1+3
-		cmp #$d6
-		bcs @no_right
+		cmp which_boundary, x
+		beq @next_button
 			clc
-			adc #$04
+			adc which_add, x
 			sta car1+3
-@no_right:
+@next_button:
+	dex
+	bpl @do_controls
 
 	lda car1
 	sta car2
@@ -330,7 +365,6 @@ loop:
 	cmp #$e4
 	bne :++
 		lda #%11010111
-		sta $400c
 		sta $400e
 		sta $400f
 		lda #$f0
@@ -338,7 +372,7 @@ loop:
 		lda chicken_missed+1
 		cmp #$0a
 		bne :+
-			jmp game_over
+			beq game_over
 :		inc chicken_missed+1
 :
 
@@ -356,10 +390,14 @@ game_over:
 	beq @no_start
 		jmp reset
 @no_start:
-	lda nmi_num						; Wait for an NMI to happen before running
-:	cmp nmi_num						; the main loop again
-	beq :-		
-	jmp game_over
+	beq game_over
+
+button_which:
+.byte left_punch, right_punch
+which_add:
+.byte $fc,        $04
+which_boundary:
+.byte $26,        $d6
 
 do_score:
 	lda score_tens+1
@@ -398,16 +436,33 @@ random_big:
 random_x:
 	.byte   $08,   $28,  $58, $78, $98
 nmi:
+;	pha				; Save the registers
+;	txa
+;	pha
+;	tya
+;	pha
+
 	inc nmi_num
 
 	lda #$02						; Do sprite transfer
 	sta $4014						;
+
+	ldx #0
+	lda #$3f
+	sta $2006
+	stx $2006
+:	lda pal_address, x
+	sta $2007
+	inx
+	cpx #27
+	bne :-
 
 	ldx #$01
 	stx $4016
 	dex
 	stx $4016
 	lda control_pad
+	sta control_old
 	ldx #$08
 :	lda $4016
 	lsr A
@@ -415,70 +470,75 @@ nmi:
 	dex
 	bne :-
 
-	lda #$00
-	sta $2005
-	sta $2005
+	lda save2000
+	sta $2000
+	stx $2005
+	stx $2005
 
-	dec sq1_wait
-;	lda sq1_wait
-	bne @done_sq1
-		ldx sq1_offset
-		lda sq1_time, x
-		sta sq1_wait
-		lda #%10101111
-		sta $4000
-		lda #$70
-		sta $4001
-		lda sq1_lo, x
-		sta $4002
-		lda sq1_hi, x
-		sta $4003
-		inx
-		stx sq1_offset
-		cpx #$0d
-		bne @done_sq1
-			ldx #$00
-			stx sq1_offset
-@done_sq1:
+	dec sound_tempo					; Don't update song if not 0
+	bne @sound_update_done
+		ldx #1					; Start with noise channel and work backwards
+@start_channels:
+		lda channel_notelength_perm, x		; If a channel is set to 0, the channel is
+		beq @next_channel			;  unused in the song, and sfx can be used in game
+			dec channel_notelength, x	; Don't update channel if not 0
+			bne @next_channel
+			lda channel_notelength_perm, x	; Set the perma-length of the notes for the channel
+			sta channel_notelength, x
+			lda channel_headers, x		; Get the data for $4000/4/8/c
+			sta channel_header
+			txa				; Get loop offset and push on the stack for later
+			pha
+			asl				; Multiply loop offset by 4 to get proper channel
+			asl				;  to run and stick it in the Y register (head nod to
+			tay				;  TakuikaNinja on NESDev forums for this snippet)
+			lda channel_melody, x		; Get what offset the channel is on from zeropage
+			tax				;  and place it in the X register
+			lda channel_header		; Place the header into the top register of
+			sta $400c
+			sta $4000, y			;  the channel and use different labels already
+			lda #$70			;  within the game code place in the other
+			sta $4001, y			;  channels. Play around with different labels
+			lda sq1_lo, x			;  and find those which play nice with each
+			sta $4002, y			;  other, and experiment with the note length
+			lda sq1_hi, x			;  and offset of notes to see what makes something
+			sta $4003, y			;  at least semi-interesting.
+			inx				; Increase the offset of the channel's melody
+			txa				;  and put place in Y
+			tay
+			pla				; Retrieve which channel you are on from the stack
+			tax				;  and place it back in the X register
+			tya				; Put the channel's melody offset into A and store
+			sta channel_melody, x		;  it in the melody offset
+			cmp #$08			; Check that against how many notes are in the melody
+			bne :+				;  and set it back to 0 when you have reached the end
+				lda #0
+:				sta channel_melody, x
+@next_channel:
+		dex					; Decrement to the next channel and finish after they
+		bpl @start_channels			;  have all been tested/ran
+		lda #1					; Start the tempo counter over again
+		sta sound_tempo
+@sound_update_done:
 
-	dec sq2_wait
-;	lda sq2_wait
-	bne @done_sq2
-		ldx sq2_offset
-		lda sq2_time, x
-		sta sq2_wait
-		lda #%01101111
-		sta $4004
-		lda #$70
-		sta $4005
-		lda sq2_lo, x
-		sta $4006
-		lda sq2_hi, x
-		sta $4007
-		inx
-		stx sq2_offset
-		cpx #$03
-		bne @done_sq2
-			ldx #$00
-			stx sq2_offset
-@done_sq2:
-
+;	pla						; Restore the registers
+;	tay						;
+;	pla						;
+;	tax						;
+;	pla
 irq:
 	rti
 
-sq1_time:
-	.byte $08, $08, $08, $08, $08, $08, $10, $08, $08, $10, $08, $08, $10
-sq1_lo:
-	.byte $52, $fd, $e2, $fd, $e2, $fd, $52, $fb, $7f, $a6, $7f, $7f, $fb
-sq1_hi:
-	.byte $81, $80, $80, $80, $80, $80, $81, $81, $82, $82, $82, $82, $81
 
-sq2_time:
-	.byte $20, $20, $40
-sq2_lo:
-	.byte $52, $e2, $fd
-sq2_hi:
-	.byte $81, $80, $80
+channel_headers:			; Data for $4000/4/8/c
+.byte $af,$6f
+channel_notelength_perm:		; Note lengths for each channel
+.byte $08,$20			; channel_notelength_perm spills into channel_melody_max
+
+sq1_lo:
+	.byte $52, $fd, $e2, $fd, $e2, $fd, $52
+sq1_hi:
+	.byte $81, $80, $80, $80, $80, $80, $81
 
 pal_bg:
 	.byte $0f,$21,$21,$0f, $0f,$0f,$0f,$0f, $0f,$0f,$0f,$0f, $0f,$0f,$0f,$0f
@@ -488,6 +548,13 @@ pal_spr:
 
 patterns:
 	.incbin "no_points.chr"
+
+color0:
+.byte $27,$19,$05,$30
+color1:
+.byte $17,$0b,$07,$10
+color2:
+.byte $31,$31,$31,$00
 
 addy_lo:
 	.byte $00,$01,$02,$03,$1d,$1e,$1f
@@ -519,8 +586,6 @@ the_sprites:
 	.byte $08,$0b,$02,$c0
 	.byte $10,$0b,$02,$c0
 
-font_offsets:
-	.byte 5,10,15,20,25,30,35,40,45,50	; 10 bytes
 zero:
 	.byte $3c,$24,$24,$24,$3c
 one:
