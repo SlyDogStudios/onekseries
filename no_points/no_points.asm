@@ -1,4 +1,4 @@
-; No Points
+; THE CHRILOGY LOOP (PART 2) - NO POINTS
 ;
 ; Take on the role of Manny Maniac, the main threat to
 ; all of chicken-kind for decades now. Little did the
