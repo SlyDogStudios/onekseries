@@ -1,6 +1,11 @@
-; FOR POINTS
+; THE CHRILOGY LOOP (PART 1) - FOR POINTS
 ;
 ; Why did the chicken cross the road? For Points, of course!
+; Traffic is thicker than usual, and the chickens feel as
+; if there is something nefarious afoot, but they can't quite
+; put a feather on it. They are absolutely sure that there is
+; fowl play happening, however.
+;
 ; Get the chicken across the road to get some points. Don't
 ; get hit by a car though. Chickens are pretty defenseless 
 ; against cars.
